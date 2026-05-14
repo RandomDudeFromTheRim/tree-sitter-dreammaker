@@ -8,15 +8,25 @@ module.exports = grammar({
   extras: ($) => [$.comment, /\s/],
 
   conflicts: ($) => [
-    // identifier '(' could be function call or expression
+    // identifier '(' could be function call or just an identifier
     [$.function_call, $.identifier],
     [$.function_call, $.member_access],
     [$.function_call, $._primary],
+    // type_path can be a value or the start of proc/verb definition
     [$._primary, $.proc_definition, $.verb_definition],
+    // 'return' could be standalone or followed by an expression
+    [$.return_statement, $._statement],
+    [$.return_statement, $.expression_statement],
+    // 'set' could be standalone or followed by expression
+    [$.set_statement, $.expression_statement],
+    // 'del' could be standalone or followed by expression
+    [$.del_statement, $.expression_statement],
+    // for( could be for statement or function call
+    [$.for_statement, $.function_call],
   ],
 
   precedences: ($) => [
-    // function_call should win over plain expression when we see 'identifier('
+    ["call", "primary"],
     ["call", "value"],
   ],
 
@@ -30,7 +40,6 @@ module.exports = grammar({
         choice(seq("//", /[^\n]*/), seq("/*", /[^*]*\*+([^/*][^*]*\*+)*/, "/")),
       ),
 
-    // ---- Newlines (significant in DM) ----
     newline: ($) => /\n/,
 
     // ---- Preprocessor ----
@@ -57,11 +66,7 @@ module.exports = grammar({
     // ---- Numbers ----
     number: ($) =>
       token(
-        choice(
-          /0x[0-9a-fA-F]+/, // hex
-          /[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?/, // float
-          /[0-9]+/, // integer
-        ),
+        choice(/0x[0-9a-fA-F]+/, /[0-9]+\.[0-9]+([eE][+-]?[0-9]+)?/, /[0-9]+/),
       ),
 
     // ---- Strings ----
@@ -93,7 +98,6 @@ module.exports = grammar({
     resource: ($) => seq("'", repeat(choice(/[^'\\\n]+/, /\\(.|\n)/)), "'"),
 
     // ---- Type paths ----
-    // Simple flat type paths: /datum, /mob/living, /datum/var/name, .type, :type
     type_path: ($) =>
       token(
         seq(
@@ -102,14 +106,14 @@ module.exports = grammar({
         ),
       ),
 
-    // ---- Primary expressions ----
+    // ---- Primary values ----
     _primary: ($) =>
       choice(
         $.number,
         $.string,
         $.type_path,
         $.identifier,
-        prec(1, seq("'", $.identifier, "'")),
+        prec("primary", seq("'", $.identifier, "'")),
         $.list_literal,
         $.parenthesized_expression,
       ),
@@ -140,7 +144,7 @@ module.exports = grammar({
 
     parenthesized_expression: ($) => seq("(", $._expression, ")"),
 
-    // ---- Values (chainable) ----
+    // ---- Values ----
     _value: ($) =>
       choice($.function_call, $.member_access, $.array_access, $._primary),
 
@@ -156,10 +160,7 @@ module.exports = grammar({
       ),
 
     unary_expression: ($) =>
-      prec(
-        "value",
-        seq(choice("!", "~", "-", "+", "++", "--", "&", "*"), $._expression),
-      ),
+      seq(choice("!", "~", "-", "+", "++", "--", "&", "*"), $._expression),
 
     _postfix_expression: ($) => seq($._expression, choice("++", "--")),
 
@@ -307,22 +308,7 @@ module.exports = grammar({
       seq(
         "for",
         "(",
-        optional(
-          choice(
-            seq(
-              choice(
-                seq(
-                  optional("var"),
-                  "/",
-                  $.identifier,
-                  optional(seq("/", $.identifier)),
-                ),
-                $.identifier,
-              ),
-              optional(seq(",", $._expression)),
-            ),
-          ),
-        ),
+        optional(seq($.identifier, optional(seq(",", $._expression)))),
         ")",
         $._statement,
       ),
@@ -349,6 +335,7 @@ module.exports = grammar({
 
     expression_statement: ($) => seq($._expression, optional(";")),
 
+    // Block
     block: ($) => seq("{", repeat(choice($._statement, $.newline)), "}"),
   },
 });

@@ -1731,6 +1731,11 @@
     [
       "function_call",
       "_primary"
+    ],
+    [
+      "_primary",
+      "proc_definition",
+      "verb_definition"
     ]
   ],
   "precedences": [
