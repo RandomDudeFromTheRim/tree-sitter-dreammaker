@@ -327,7 +327,7 @@ module.exports = grammar({
         optional($.block),
       ),
 
-    return_statement: ($) => seq("return", optional($._expression)),
+    return_statement: ($) => prec.right(seq("return", optional($._expression))),
 
     del_statement: ($) => seq("del", $._expression),
 
