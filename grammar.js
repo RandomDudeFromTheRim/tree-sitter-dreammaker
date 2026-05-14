@@ -23,6 +23,7 @@ module.exports = grammar({
     [$.del_statement, $.expression_statement],
     // for( could be for statement or function call
     [$.for_statement, $.function_call],
+    [$.function_call, $._value],
   ],
 
   precedences: ($) => [
