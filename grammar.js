@@ -12,7 +12,7 @@ module.exports = grammar({
     [$.function_call, $.identifier],
     [$.function_call, $.member_access],
     [$.function_call, $._primary],
-    // type paths overlap with plain identifiers in expressions
+    [$._primary, $.proc_definition, $.verb_definition],
   ],
 
   precedences: ($) => [
