@@ -8,13 +8,17 @@ module.exports = grammar({
   extras: ($) => [$.comment, /\s/],
 
   conflicts: ($) => [
-    [$._expression, $.type_path],
-    [$._expression, $.proc_definition],
+    // identifier '(' could be function call or expression
+    [$.function_call, $.identifier],
+    [$.function_call, $.member_access],
+    // type paths overlap with plain identifiers in expressions
+    [$.type_path, $.identifier],
   ],
 
-  // ---------------------------------------------------------------
-  // Super-simple rules first
-  // ---------------------------------------------------------------
+  precedences: ($) => [
+    // function_call should win over plain expression when we see 'identifier('
+    ["call", "value"],
+  ],
 
   rules: {
     source_file: ($) =>
@@ -72,13 +76,7 @@ module.exports = grammar({
     ordinary_string: ($) =>
       seq(
         '"',
-        repeat(
-          choice(
-            /[^"\\\n\[\]]+/,
-            /\\(.|\n)/,
-            seq("[[", /[^\]]*/, "]]"), // skip interpolation brackets in ordinary strings
-          ),
-        ),
+        repeat(choice(/[^"\\\n\[\]]+/, /\\(.|\n)/, seq("[[", /[^\]]*/, "]]"))),
         '"',
       ),
 
@@ -89,42 +87,50 @@ module.exports = grammar({
         '"',
       ),
 
-    // Block strings {"..."}
     block_string: ($) =>
       seq('{"', repeat(choice(/[^"\\\n]+/, /\\(.|\n)/)), '"}'),
 
-    // Resource file: 'filename'
     resource: ($) => seq("'", repeat(choice(/[^'\\\n]+/, /\\(.|\n)/)), "'"),
 
     // ---- Type paths ----
-    // /datum, /mob/living/carbon, /datum/var/name
     type_path: ($) =>
       seq(
         choice("/", ".", ":"),
         optional(
           seq(
             $.identifier,
-            repeat(
-              seq("/", optional(choice(seq($.identifier, "/"))), $.identifier),
-            ),
+            repeat(seq("/", optional(seq($.identifier, "/")), $.identifier)),
           ),
         ),
       ),
 
-    // ---- Variables and values ----
-    _value: ($) =>
+    // ---- Primary expressions ----
+    _primary: ($) =>
       choice(
         $.number,
         $.string,
         $.type_path,
         $.identifier,
-        prec(1, seq("'", $.identifier, "'")), // quoted identifiers
+        prec(1, seq("'", $.identifier, "'")),
         $.list_literal,
         $.parenthesized_expression,
-        $.function_call,
-        $.member_access,
-        $.array_access,
       ),
+
+    // ---- Calls and accesses ----
+    function_call: ($) =>
+      prec(
+        "call",
+        seq(
+          choice($.identifier, $.member_access, $.type_path),
+          "(",
+          optional(seq($._expression, repeat(seq(",", $._expression)))),
+          ")",
+        ),
+      ),
+
+    member_access: ($) => seq($._expression, ".", $.identifier),
+
+    array_access: ($) => seq($._expression, "[", $._expression, "]"),
 
     list_literal: ($) =>
       seq(
@@ -136,22 +142,15 @@ module.exports = grammar({
 
     parenthesized_expression: ($) => seq("(", $._expression, ")"),
 
-    function_call: ($) =>
-      seq(
-        choice($.identifier, $.member_access, $.type_path),
-        "(",
-        optional(seq($._expression, repeat(seq(",", $._expression)))),
-        ")",
-      ),
-
-    member_access: ($) => seq($._expression, ".", $.identifier),
-
-    array_access: ($) => seq($._expression, "[", $._expression, "]"),
+    // ---- Values (chainable) ----
+    _value: ($) =>
+      choice($.function_call, $.member_access, $.array_access, $._primary),
 
     // ---- Expressions ----
     _expression: ($) =>
       choice(
         $.unary_expression,
+        $._postfix_expression,
         $.binary_expression,
         $.ternary_expression,
         $.assignment_expression,
@@ -159,9 +158,11 @@ module.exports = grammar({
       ),
 
     unary_expression: ($) =>
-      seq(choice("!", "~", "-", "+", "++", "--", "&", "*"), $._expression),
+      prec(
+        "value",
+        seq(choice("!", "~", "-", "+", "++", "--", "&", "*"), $._expression),
+      ),
 
-    // Postfix ++ and --
     _postfix_expression: ($) => seq($._expression, choice("++", "--")),
 
     binary_expression: ($) =>
@@ -245,7 +246,6 @@ module.exports = grammar({
         $.block,
       ),
 
-    // var/type/name = value
     var_statement: ($) =>
       seq(
         "var",
@@ -260,7 +260,6 @@ module.exports = grammar({
         ),
       ),
 
-    // type/proc/name (args) { body }
     proc_definition: ($) =>
       seq(
         $.type_path,
@@ -274,7 +273,6 @@ module.exports = grammar({
         optional($.block),
       ),
 
-    // type/verb/name (args) { body }
     verb_definition: ($) =>
       seq(
         $.type_path,
@@ -341,7 +339,7 @@ module.exports = grammar({
 
     switch_case: ($) =>
       seq(
-        choice(seq("if", "(", $._expression, ")"), seq("else")),
+        choice(seq("if", "(", $._expression, ")"), "else"),
         optional($.block),
       ),
 
@@ -353,7 +351,6 @@ module.exports = grammar({
 
     expression_statement: ($) => seq($._expression, optional(";")),
 
-    // Block
     block: ($) => seq("{", repeat(choice($._statement, $.newline)), "}"),
   },
 });
