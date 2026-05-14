@@ -13,8 +13,6 @@ module.exports = grammar({
     [$.function_call, $.member_access],
     [$.function_call, $._primary],
     // type paths overlap with plain identifiers in expressions
-    [$.type_path, $.identifier],
-    [$.type_path, $._primary],
   ],
 
   precedences: ($) => [
@@ -95,14 +93,12 @@ module.exports = grammar({
     resource: ($) => seq("'", repeat(choice(/[^'\\\n]+/, /\\(.|\n)/)), "'"),
 
     // ---- Type paths ----
+    // Simple flat type paths: /datum, /mob/living, /datum/var/name, .type, :type
     type_path: ($) =>
-      seq(
-        choice("/", ".", ":"),
-        optional(
-          seq(
-            $.identifier,
-            repeat(seq("/", optional(seq($.identifier, "/")), $.identifier)),
-          ),
+      token(
+        seq(
+          choice("/", ".", ":"),
+          /[a-zA-Z_][a-zA-Z0-9_]*(\/[a-zA-Z_][a-zA-Z0-9_]*)*/,
         ),
       ),
 

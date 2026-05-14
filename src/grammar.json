@@ -1776,8 +1776,16 @@
       "member_access"
     ],
     [
+      "function_call",
+      "_primary"
+    ],
+    [
       "type_path",
       "identifier"
+    ],
+    [
+      "type_path",
+      "_primary"
     ]
   ],
   "precedences": [
