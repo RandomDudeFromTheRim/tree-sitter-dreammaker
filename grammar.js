@@ -11,8 +11,10 @@ module.exports = grammar({
     // identifier '(' could be function call or expression
     [$.function_call, $.identifier],
     [$.function_call, $.member_access],
+    [$.function_call, $._primary],
     // type paths overlap with plain identifiers in expressions
     [$.type_path, $.identifier],
+    [$.type_path, $._primary],
   ],
 
   precedences: ($) => [
